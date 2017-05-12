@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"runtime"
 	"strconv"
 )
 
@@ -12,6 +13,9 @@ const (
 )
 
 func main() {
+	//config
+	runtime.GOMAXPROCS(4 - 1)
+	//start listener
 	listener, err := net.Listen("tcp", host+":"+strconv.Itoa(port))
 	if err != nil {
 		//		fmt.Println(err.Error())
