@@ -1,35 +1,60 @@
 package main
 
 import (
-	server "./server"
+	"context"
 	"fmt"
 	"log"
-	"net/rpc"
-)
+	"time"
 
-const (
-	servAddr = "localhost"
+	"github.com/smallnest/rpcx"
+	_ "github.com/smallnest/rpcx/clientselector"
+	"github.com/zyhazwraith/minim/server"
 )
 
 func main() {
-	client, err := rpc.DialHTTP("tcp", servAddr+":9998")
-	if err != nil {
-		log.Fatal("dialing: ", err)
-	}
-	args := &server.Args{7, 0}
 	/*
-		var reply int
-		err = client.Call("Arith.Multiply", args, &reply)
-		if err != nil {
-			log.Fatal("arith error: ", err)
-		}
-		fmt.Printf("Arith: %d * %d = %d\n", args.A, args.B, reply)
+		sv1 := &clientselector.ServerPeer{Network: "tcp", Address: "localhost:8989"}
+		sv2 := &clientselector.ServerPeer{Network: "tcp", Address: "localhost:18989"}
+
+		servers := []*clientselector.ServerPeer{sv1, sv2}
+
+		s := clientselector.NewMultiClientSelector(servers, rpcx.RandomSelect, 10*time.Second)
 	*/
-	quotient := server.Args{}
-	divCall := client.Go("Arith.Quotient", args, &quotient, nil)
-	replyCall := <-divCall.Done
-	if replyCall.Error != nil {
-		log.Fatal("arith error: ", replyCall.Error)
+	s := &rpcx.DirectClientSelector{Network: "tcp", Address: "localhost:8989", DialTimeout: 10 * time.Second}
+
+	for i := 0; i < 2; i++ {
+		callServer(s)
+		time.Sleep(2 * time.Second)
 	}
-	fmt.Println(replyCall.Reply)
+
+	/*
+		s := &rpcx.DirectClientSelector{Network: "tcp", Address: "localhost:8989", DialTimeout: 10 * time.Second}
+		client := rpcx.NewClient(s)
+
+		args := &server.Args{7, 8}
+		var reply server.Reply
+		divCall := client.Go(context.Background(), "Arith.Mul", args, &reply, nil)
+		replayCall := <-divCall.Done
+		if replayCall.Error != nil {
+			log.Fatal("Arith error: ", replayCall.Error)
+		} else {
+			fmt.Println(reply.C)
+		}
+	*/
+}
+
+func callServer(s rpcx.ClientSelector) {
+	log.Print("creating client")
+	client := rpcx.NewClient(s)
+
+	args := &server.Args{7, 9}
+	var reply server.Reply
+	err := client.Call(context.Background(), "Arith.Mul", args, &reply)
+	if err != nil {
+		log.Fatal("arith error", err)
+	} else {
+
+		fmt.Println("arith mul: ", reply.C)
+	}
+	client.Close()
 }
