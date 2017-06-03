@@ -1,23 +1,17 @@
 package main
 
 import (
-	"./server"
-	"log"
-	"net"
-	"net/http"
-	"net/rpc"
+	myserv "github.com/zyhazwraith/minim/server"
+
+	"github.com/smallnest/rpcx"
 )
 
 func main() {
-	arith := new(server.Arith)
-	rpc.Register(arith)
-	rpc.HandleHTTP()
-	lis, err := net.Listen("tcp", ":9998")
-	if err != nil {
-		log.Fatal("listen error: ", err)
-	}
-	go http.Serve(lis, nil)
-	for {
+	server := rpcx.NewServer()
+	server.RegisterName("Arith", new(myserv.Arith))
+	server.Start("tcp", "localhost:8989")
 
-	}
+	server2 := rpcx.NewServer()
+	server2.RegisterName("Arith", new(myserv.Arith2))
+	server2.Serve("tcp", "localhost:18989")
 }

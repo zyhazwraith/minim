@@ -1,29 +1,33 @@
 package server
 
-import (
-	"errors"
-)
+//	"errors"
 
 type Args struct {
-	A, B int
+	A int `msg:"a"`
+	B int `msg:"b"`
 }
 
-type Quotient struct {
-	Quo, Rem int
+type Reply struct {
+	C int `msg:"c"`
 }
 
 type Arith int
 
-func (t *Arith) Multiply(args *Args, reply *int) error {
-	*reply = args.A * args.B
+func (t *Arith) Mul(args *Args, reply *Reply) error {
+	reply.C = args.A * args.B
 	return nil
 }
 
-func (t *Arith) Quotient(args *Args, quo *Args) error {
-	if args.B == 0 {
-		return errors.New("divided by zero")
-	}
-	quo.A = args.A / args.B
-	quo.B = args.A % args.B
+func (t *Arith) Error(args *Args, reply *Reply) error {
+	panic("ERROR")
+}
+
+type Arith2 int
+
+func (t *Arith2) Mul(args *Args, reply *Reply) error {
+	reply.C = args.A * args.B * 10
 	return nil
+}
+func (t *Arith2) Error(args *Args, reply *Reply) error {
+	panic("error")
 }
