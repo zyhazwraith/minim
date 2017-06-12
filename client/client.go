@@ -6,7 +6,7 @@ import (
 	"net"
 	"os"
 )
-
+		
 func sender(conn net.Conn) {
 	name := os.Args[1]
 	for {
@@ -29,6 +29,7 @@ func reader(conn net.Conn) {
 		fmt.Println()
 		fmt.Print(string(buffer[:n]))
 		fmt.Print(":")
+
 	}
 }
 func main() {
