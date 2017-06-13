@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	//	"strconv"
+	json "github.com/bitly/go-simplejson"
+	"github.com/smallnest/rpcx"
+	"github.com/zyhazwraith/minim/proto"
+	"log"
 	"time"
 )
 
@@ -35,8 +40,17 @@ func newCS(uid string, conn *net.TCPConn) *CS {
 }
 
 var cmap map[string]*CS
+var rclient *rpcx.Client
 
 func main() {
+	// start rpcx service first
+	rserver := &rpcx.DirectClientSelector{
+		Network:     "tcp",
+		Address:     "localhost:8972",
+		DialTimeout: 10 * time.Second,
+	}
+	rclient = rpcx.NewClient(rserver)
+
 	cmap = make(map[string]*CS)
 	addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:8989")
 	listen, err := net.ListenTCP("tcp", addr)
@@ -77,17 +91,35 @@ func handleConn(conn *net.TCPConn) {
 	for {
 		conn.Read(data)
 		fmt.Println("client: ", string(data))
-		if data[0] == REQ_REG {
-			conn.Write([]byte{RES_REG, '#', 'o', 'k'})
-			uid = conn.RemoteAddr().String()
-			client = newCS(uid, conn)
-			cmap[client.u] = client
-			break
-		} else {
-			conn.Write([]byte{RES_REG, '#', '0'})
+		jsonData, _ := proto.UnpackTcp(data)
+		js, _ := json.NewJson(jsonData)
+		op, _ := js.Get("Op").Int()
+		body := js.Get("Body")
+		username, _ := body.Get("Username").String()
+		password, _ := body.Get("Password").String()
+		if op == proto.REQ_REG {
+			args := &Args{username, password}
+			var reply Reply
+			rclient.Call(context.Background(), "User.Login", args, &reply)
+			if reply.Status == true {
+				log.Print(args.Username, " auth success")
+				feedback := proto.FeedBack{true, ""}
+				uid = conn.RemoteAddr().String()
+				client = newCS(uid, conn)
+				cmap[client.u] = client
+				break
+			} else {
+				feedback := proto.FeedBack{false, ""}
+				conn.Write([]byte{REQ, '#', 's', 'b'})
+			}
+			message := proto.Message{proto.STAT, feedback}
+			data, _ := proto.PackTcp(message)
+			conn.Write(data)
 		}
 	}
 	fmt.Println("finish auth")
+	conn.Close()
+	return
 	go writeHandle(conn, client)
 	go readHandle(conn, client)
 	go work(client)
@@ -168,4 +200,8 @@ func handleMsg(client *CS, data []byte) {
 		client.wch <- []byte{RES_HB, '#', 'h', 'b'}
 	}
 	// res && res_hb do not need feedback
+}
+
+func getJson(data []byte) *json.Json{
+	return json.NewJson(
 }

@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"fmt"
+	json "github.com/bitly/go-simplejson"
+	"github.com/zyhazwraith/minim/proto"
 	_ "log"
 	"net"
 	"os"
@@ -41,14 +43,27 @@ func main() {
 }
 
 func handleConn(conn *net.TCPConn) {
-	data := make([]byte, 128)
-	for {
-		conn.Write([]byte{REQ_REG, '#', '2'})
-		conn.Read(data)
-		if data[0] == RES_REG {
-			break
-		}
 
+	for {
+		myinfo := proto.RegInfo{"test1", "123456"}
+		message := proto.Message{proto.REQ_REG, myinfo}
+		data, _ := proto.PackTcp(message)
+		fmt.Println(string(data))
+		conn.Write(data)
+		conn.Read(data)
+		body, _ := proto.UnpackTcp(data)
+		//		conn.Write([]byte{REQ_REG, '#', '2'})
+		//		conn.Read(data)
+		js, err := json.NewJson(body)
+		if err != nil {
+			return
+		}
+		res, err := js.Get("Body").Get("Status").Bool()
+		if err != nil {
+			return
+		}
+		fmt.Println(res)
+		return
 	}
 	fmt.Println("auth finish")
 	go readHandle(conn)

@@ -24,11 +24,11 @@ func main() {
 	client := rpcx.NewClient(server)
 	args := &Args{1}
 	var reply Reply
-	reply.b = 4
 	err := client.Call(context.Background(), "Arith.Test", args, &reply)
 	if err != nil {
 		fmt.Print(err)
 	} else {
 		fmt.Println(reply.b)
 	}
+	client.Close()
 }

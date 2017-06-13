@@ -3,12 +3,12 @@ package main
 type User int
 
 type Args struct {
-	username string
-	password string
+	Username string
+	Password string
 }
 
 type Reply struct {
-	code   int
-	status bool
-	msg    string
+	Code   int
+	Status bool
+	Msg    string
 }
