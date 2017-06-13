@@ -22,5 +22,7 @@ func (t *Arith) Test(args *Args, reply *Reply) error {
 func main() {
 	server := rpcx.NewServer()
 	server.RegisterName("Arith", new(Arith))
-	server.Serve("tcp", "127.0.0.1:12345")
+	go server.Serve("tcp", "127.0.0.1:12345")
+	for {
+	}
 }

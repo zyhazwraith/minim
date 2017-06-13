@@ -58,26 +58,17 @@ func main() {
 		fmt.Println("listen: ", err)
 	}
 	//	go pushAll()
-	serve(listen)
-	for {
-	}
-}
-
-func pushAll() {
-	time.Sleep(15 * time.Second)
-	for _, v := range cmap {
-		fmt.Println("push to all")
-		v.wch <- []byte{REQ, '#', 'p', 'u', 's', 'h'}
-	}
+	go serve(listen)
+	time.Sleep(1 * time.Hour)
 }
 
 func serve(listen *net.TCPListener) {
 	for {
 		conn, err := listen.AcceptTCP()
 		if err != nil {
-			fmt.Println("accept :", err)
+			log.Println("accept :", err)
 		}
-		fmt.Println("connected: ", conn.RemoteAddr().String())
+		log.Println("connected: ", conn.RemoteAddr().String())
 		go handleConn(conn)
 	}
 }
@@ -88,9 +79,10 @@ func handleConn(conn *net.TCPConn) {
 	var uid string
 	var client *CS
 	// auth first
+	var authSuc bool
 	for {
 		conn.Read(data)
-		fmt.Println("client: ", string(data))
+		//		fmt.Println("client: ", string(data))
 		jsonData, _ := proto.UnpackTcp(data)
 		js, _ := json.NewJson(jsonData)
 		op, _ := js.Get("Op").Int()
@@ -101,25 +93,30 @@ func handleConn(conn *net.TCPConn) {
 			args := &Args{username, password}
 			var reply Reply
 			rclient.Call(context.Background(), "User.Login", args, &reply)
+			feedback := proto.FeedBack{true, ""}
 			if reply.Status == true {
 				log.Print(args.Username, " auth success")
-				feedback := proto.FeedBack{true, ""}
 				uid = conn.RemoteAddr().String()
 				client = newCS(uid, conn)
 				cmap[client.u] = client
-				break
+				authSuc = true
 			} else {
-				feedback := proto.FeedBack{false, ""}
-				conn.Write([]byte{REQ, '#', 's', 'b'})
+				feedback = proto.FeedBack{false, ""}
+				//				conn.Write([]byte{REQ, '#', 's', 'b'})
+				authSuc = false
 			}
 			message := proto.Message{proto.STAT, feedback}
 			data, _ := proto.PackTcp(message)
 			conn.Write(data)
 		}
+		break
 	}
-	fmt.Println("finish auth")
-	conn.Close()
-	return
+	if authSuc == false {
+		log.Println(conn.RemoteAddr().String(), " disconnect")
+		conn.Close()
+		return
+	}
+	log.Println(conn.RemoteAddr().String(), " auth success")
 	go writeHandle(conn, client)
 	go readHandle(conn, client)
 	go work(client)
@@ -146,7 +143,7 @@ func writeHandle(conn *net.TCPConn, client *CS) {
 
 func readHandle(conn *net.TCPConn, client *CS) {
 	for {
-		data := make([]byte, 128)
+		data := make([]byte, 1024)
 		err := conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 		if err != nil {
 			return
@@ -154,7 +151,7 @@ func readHandle(conn *net.TCPConn, client *CS) {
 		n, err := conn.Read(data)
 		if err != nil {
 		}
-		if n != 0 {
+		if n != 0 && data[0] == '#' {
 			client.rch <- data
 		}
 	}
@@ -168,13 +165,28 @@ func work(client *CS) {
 			handleMsg(client, data)
 		case <-time.After(time.Second * 60):
 			delete(cmap, client.u)
-			fmt.Println("heartbeat time out")
+			log.Println(client.u, " heartbeat time out")
 			client.dch <- true
 			return
 		}
 	}
 }
 
+func handleMsg(client *CS, data []byte) {
+	jsBody, _ := proto.UnpackTcp(data)
+	js, _ := json.NewJson(jsBody)
+	op, _ := js.Get("Op").Int()
+	//	fmt.Println(op == proto.REQ)
+	if op != proto.REQ {
+		return
+	}
+	danmu := js.Get("Body")
+	username, _ := danmu.Get("Username").String()
+	content, _ := danmu.Get("Content").String()
+	fmt.Print(username, "say: ", content)
+}
+
+/*
 func handleMsg(client *CS, data []byte) {
 	if data[0] == REQ {
 		// msg recv log
@@ -201,7 +213,8 @@ func handleMsg(client *CS, data []byte) {
 	}
 	// res && res_hb do not need feedback
 }
-
-func getJson(data []byte) *json.Json{
-	return json.NewJson(
+*/
+func getJson(data []byte) *json.Json {
+	js, _ := json.NewJson(data)
+	return js
 }
