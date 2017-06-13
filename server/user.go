@@ -1,8 +1,11 @@
 package main
 
-import ()
+import (
+	"log"
+)
 
 type User int
+type Message int
 
 type Args struct {
 	Username string
@@ -13,6 +16,12 @@ type Reply struct {
 	Code   int
 	Status bool
 	Msg    string
+}
+
+type Msg struct {
+	Username string
+	Content  string
+	RoomId   int
 }
 
 func (u *User) Login(args *Args, reply *Reply) error {
@@ -26,5 +35,14 @@ func (u *User) Login(args *Args, reply *Reply) error {
 	} else {
 		reply.Status = false
 	}
+	log.Print(args.Username, " login ", reply.Status)
 	return err
+}
+
+func (u *User) Broad(args *Msg, reply *Reply) error {
+	numLock.Lock()
+	numPush++
+	numLock.Unlock()
+	wch <- *args
+	return nil
 }

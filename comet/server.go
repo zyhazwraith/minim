@@ -22,36 +22,39 @@ const (
 )
 
 type CS struct {
-	rch  chan []byte
-	wch  chan []byte
-	dch  chan bool
-	u    string
-	conn *net.TCPConn
+	rch    chan []byte
+	wch    chan []byte
+	dch    chan bool
+	u      string
+	roomId int
+	conn   *net.TCPConn
 }
 
-func newCS(uid string, conn *net.TCPConn) *CS {
+func newCS(uid string, roomId int, conn *net.TCPConn) *CS {
 	return &CS{
-		rch:  make(chan []byte),
-		wch:  make(chan []byte),
-		dch:  make(chan bool),
-		u:    uid,
-		conn: conn,
+		rch:    make(chan []byte),
+		wch:    make(chan []byte),
+		dch:    make(chan bool),
+		u:      uid,
+		roomId: roomId,
+		conn:   conn,
 	}
 }
 
 var cmap map[string]*CS
 var rclient *rpcx.Client
+var rserver *rpcx.DirectClientSelector
+var roomNum map[int]int
 
 func main() {
 	// start rpcx service first
-	rserver := &rpcx.DirectClientSelector{
+	rserver = &rpcx.DirectClientSelector{
 		Network:     "tcp",
 		Address:     "localhost:8972",
 		DialTimeout: 10 * time.Second,
 	}
-	rclient = rpcx.NewClient(rserver)
-
 	cmap = make(map[string]*CS)
+	roomNum = make(map[int]int)
 	addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:8989")
 	listen, err := net.ListenTCP("tcp", addr)
 	if err != nil {
@@ -59,6 +62,11 @@ func main() {
 	}
 	//	go pushAll()
 	go serve(listen)
+	// also serve as rpcx server
+	cometServer := rpcx.NewServer()
+	cometServer.RegisterName("Push", new(Push))
+	log.Println("start serve as rpcx server")
+	go cometServer.Serve("tcp", "127.0.0.1:9001")
 	time.Sleep(1 * time.Hour)
 }
 
@@ -80,8 +88,12 @@ func handleConn(conn *net.TCPConn) {
 	var client *CS
 	// auth first
 	var authSuc bool
+	authSuc = false
 	for {
 		conn.Read(data)
+		if data[0] != '#' {
+			break
+		}
 		//		fmt.Println("client: ", string(data))
 		jsonData, _ := proto.UnpackTcp(data)
 		js, _ := json.NewJson(jsonData)
@@ -89,16 +101,26 @@ func handleConn(conn *net.TCPConn) {
 		body := js.Get("Body")
 		username, _ := body.Get("Username").String()
 		password, _ := body.Get("Password").String()
+		roomId, _ := body.Get("RoomId").Int()
 		if op == proto.REQ_REG {
 			args := &Args{username, password}
 			var reply Reply
+			rclient = rpcx.NewClient(rserver)
 			rclient.Call(context.Background(), "User.Login", args, &reply)
 			feedback := proto.FeedBack{true, ""}
 			if reply.Status == true {
 				log.Print(args.Username, " auth success")
 				uid = conn.RemoteAddr().String()
-				client = newCS(uid, conn)
+				// add client map
+				client = newCS(uid, roomId, conn)
 				cmap[client.u] = client
+				// add roomNum
+				if _, ok := roomNum[roomId]; ok {
+					roomNum[roomId]++
+				} else {
+					roomNum[roomId] = 1
+				}
+				log.Print(username, " entered ", roomId, " now this comet has ", roomNum[roomId])
 				authSuc = true
 			} else {
 				feedback = proto.FeedBack{false, ""}
@@ -123,6 +145,7 @@ func handleConn(conn *net.TCPConn) {
 	select {
 	case <-client.dch:
 		fmt.Println("close handler goroutine")
+		roomNum[client.roomId]--
 	}
 }
 
@@ -183,7 +206,11 @@ func handleMsg(client *CS, data []byte) {
 	danmu := js.Get("Body")
 	username, _ := danmu.Get("Username").String()
 	content, _ := danmu.Get("Content").String()
-	fmt.Print(username, "say: ", content)
+	roomid, _ := danmu.Get("RoomId").Int()
+	args := &Msg{username, content, roomid}
+	var reply Reply
+	rclient = rpcx.NewClient(rserver)
+	rclient.Call(context.Background(), "User.Broad", args, &reply)
 }
 
 /*
@@ -217,4 +244,10 @@ func handleMsg(client *CS, data []byte) {
 func getJson(data []byte) *json.Json {
 	js, _ := json.NewJson(data)
 	return js
+}
+
+func preMsg(username string, content string) []byte {
+	body := proto.Danmu{username, content, 0}
+	data, _ := proto.PackTcp(proto.Message{proto.REQ, body})
+	return data
 }

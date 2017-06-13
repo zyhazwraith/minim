@@ -26,6 +26,7 @@ type FeedBack struct {
 	Status bool
 	Error  string
 }
+
 type RegInfo struct {
 	Username string
 	Password string
@@ -35,6 +36,7 @@ type RegInfo struct {
 type Danmu struct {
 	Username string
 	Content  string
+	RoomId   int
 }
 
 func PackTcp(data interface{}) ([]byte, error) {

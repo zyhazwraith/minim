@@ -86,7 +86,7 @@ func input() {
 		fmt.Print(": ")
 		reader := bufio.NewReader(os.Stdin)
 		data, _ := reader.ReadBytes('\n')
-		danmu := proto.Danmu{username, string(data)}
+		danmu := proto.Danmu{username, string(data), room}
 		message := proto.Message{proto.REQ, danmu}
 		data, _ = proto.PackTcp(message)
 		wch <- data
@@ -142,10 +142,11 @@ func recvMsg(data []byte) {
 	if op != proto.REQ {
 		return
 	}
-	danmu := js.Get("Danmu")
-	uname, _ := danmu.Get("username").String()
-	content, _ := danmu.Get("content").String()
+	danmu := js.Get("Body")
+	uname, _ := danmu.Get("Username").String()
+	content, _ := danmu.Get("Content").String()
 	if uname != username {
-		fmt.Print(username, ":", content)
+		fmt.Print("\n", username, ":", content)
+		fmt.Print(": ")
 	}
 }
